@@ -1,0 +1,7 @@
+.envrc
+.direnv
+zls.json
+roms/*
+
+.zig-cache/*
+zig-cache/*
