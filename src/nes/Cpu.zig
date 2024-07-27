@@ -6,6 +6,19 @@ const Memory = @import("./Memory.zig");
 
 const Allocator = std.mem.Allocator;
 
+const AddressingMode = enum {
+    immediate,
+    zero_page,
+    zero_page_x,
+    zero_page_y,
+    absolute,
+    absolute_x,
+    absolute_y,
+    indirect_x,
+    indirect_y,
+    none_addressing,
+};
+
 /// STD testing function
 ///
 /// [std.testing.expect](https://ziglang.org/documentation/0.13.0/std/#std.testing.expect)
@@ -80,6 +93,58 @@ pub fn reset(self: *Self) void {
     self.program_counter = self.mem.read_u16(0xFFFC);
 }
 
+fn get_operand_address(self: *Self, mode: AddressingMode) u16 {
+    return switch (mode) {
+        .immediate => self.program_counter,
+        .zero_page => @intCast(self.mem.read(self.program_counter)),
+        .absolute => self.mem.read_u16(self.program_counter),
+        .zero_page_x => {
+            const pos = self.mem.read(self.program_counter);
+            const addr = @addWithOverflow(pos, self.register_x).@"0";
+            return @intCast(addr);
+        },
+        .zero_page_y => {
+            const pos = self.mem.read(self.program_counter);
+            const addr = @addWithOverflow(pos, self.register_y).@"0";
+            return @intCast(addr);
+        },
+        .absolute_x => {
+            const base = self.mem.read_u16(self.program_counter);
+            const addr = @addWithOverflow(base, self.register_x).@"0";
+            return @intCast(addr);
+        },
+        .absolute_y => {
+            const base = self.mem.read_u16(self.program_counter);
+            const addr = @addWithOverflow(base, self.register_y).@"0";
+
+            return @intCast(addr);
+        },
+        .indirect_x => {
+            const base = self.mem.read(self.program_counter);
+
+            const ptr = @addWithOverflow(base, self.register_x).@"0";
+            const lo: u16 = @intCast(self.mem.read(ptr));
+            const hi: u16 = @intCast(self.mem.read(@addWithOverflow(ptr, 1).@"0"));
+
+            return (hi << 8) | lo;
+        },
+        .indirect_y => {
+            const base = self.mem.read(self.program_counter);
+
+            const lo: u16 = @intCast(self.mem.read(base));
+            const hi: u16 = @intCast(self.mem.read(@addWithOverflow(base, 1).@"0"));
+
+            const deref_base = (hi << 8) | lo;
+            const deref = @addWithOverflow(deref_base, self.register_y).@"0";
+
+            return deref;
+        },
+        .none_addressing => {
+            std.debug.panic("Invalid addressing mode\n", .{});
+        },
+    };
+}
+
 /// INX - Increment X Register
 ///
 /// [6502 CPU INX](https://www.nesdev.org/obelisk-6502-guide/reference.html#INX)
@@ -93,9 +158,20 @@ fn inx(self: *Self) void {
 /// LDA - Load Accumulator
 ///
 /// [6502 CPU LDA](https://www.nesdev.org/obelisk-6502-guide/reference.html#LDA)
-fn lda(self: *Self, value: u8) void {
+fn lda(self: *Self, mode: AddressingMode) void {
+    const addr = self.get_operand_address(mode);
+    const value = self.mem.read(addr);
+
     self.register_a = value;
     self.update_status(self.register_a);
+}
+
+/// STA - Store Accumulator
+///
+/// [6502 CPU STA](https://www.nesdev.org/obelisk-6502-guide/reference.html#STA)
+fn sta(self: *Self, mode: AddressingMode) void {
+    const addr = self.get_operand_address(mode);
+    self.mem.write(addr, self.register_a);
 }
 
 /// TAX - Transfer Accumulator to (Index) X
@@ -136,14 +212,72 @@ pub fn run(self: *Self) void {
         self.program_counter += 1;
 
         switch (opscode) {
-            0xA9 => {
-                const param = self.mem.read(self.program_counter); // program[self.program_counter];
-                self.program_counter += 1;
-
-                self.lda(param);
-            },
-            0xAA => self.tax(),
+            // === INX ===
             0xE8 => self.inx(),
+            // === LDA ===
+            0xA9 => {
+                self.lda(AddressingMode.immediate);
+                self.program_counter += 1;
+            },
+            0xA5 => {
+                self.lda(AddressingMode.zero_page);
+                self.program_counter += 1;
+            },
+            0xB5 => {
+                self.lda(AddressingMode.zero_page_x);
+                self.program_counter += 1;
+            },
+            0xAD => {
+                self.lda(AddressingMode.absolute);
+                self.program_counter += 2;
+            },
+            0xBD => {
+                self.lda(AddressingMode.absolute_x);
+                self.program_counter += 2;
+            },
+            0xB9 => {
+                self.lda(AddressingMode.absolute_y);
+                self.program_counter += 2;
+            },
+            0xA1 => {
+                self.lda(AddressingMode.indirect_x);
+                self.program_counter += 1;
+            },
+            0xB1 => {
+                self.lda(AddressingMode.indirect_y);
+                self.program_counter += 1;
+            },
+            // === STA ===
+            0x85 => {
+                self.sta(AddressingMode.zero_page);
+                self.program_counter += 1;
+            },
+            0x95 => {
+                self.sta(AddressingMode.zero_page_x);
+                self.program_counter += 1;
+            },
+            0x8D => {
+                self.sta(AddressingMode.absolute);
+                self.program_counter += 2;
+            },
+            0x9D => {
+                self.sta(AddressingMode.absolute_x);
+                self.program_counter += 2;
+            },
+            0x99 => {
+                self.sta(AddressingMode.absolute_y);
+                self.program_counter += 2;
+            },
+            0x81 => {
+                self.sta(AddressingMode.indirect_x);
+                self.program_counter += 1;
+            },
+            0x91 => {
+                self.sta(AddressingMode.indirect_y);
+                self.program_counter += 1;
+            },
+            // === TAX ===
+            0xAA => self.tax(),
             0x00 => {
                 return;
             },
@@ -213,6 +347,19 @@ test "0xA9 lda zero flag set" {
     cpu.run();
 
     try expect(cpu.status & 0b0000_0010 == 0b10);
+}
+
+test "0xA9 lda from memory" {
+    var cpu = Self.init();
+    cpu.mem.write(0x10, 0x55);
+
+    const instructions = &[_]u8{ 0xA5, 0x10, 0x00 };
+
+    cpu.load(@ptrCast(@constCast(instructions)));
+    cpu.reset();
+    cpu.run();
+
+    try expect(cpu.register_a == 0x55);
 }
 
 // === TAX (0xAA) ===
