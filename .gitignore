@@ -5,3 +5,4 @@ roms/*
 
 .zig-cache/*
 zig-cache/*
+zig-out/*

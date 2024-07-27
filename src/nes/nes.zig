@@ -1,5 +1,6 @@
 pub const Cpu = @import("./Cpu.zig");
-
+const Mem = @import("./Memory.zig");
 test {
-    @import("std").testing.refAllDecls(@This());
+    _ = Cpu;
+    _ = Mem;
 }

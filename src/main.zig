@@ -1,13 +1,31 @@
 const std = @import("std");
 
+const Allocator = std.mem.Allocator;
+const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
+
 const nes = @import("./nes/nes.zig");
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    const cpu = nes.Cpu.init();
-    std.debug.print("Register a: {d}", .{cpu.register_a});
+    var cpu = nes.Cpu.init();
+
+    const instructions = &[_]u8{ 0xA9, 0x05, 0x00 };
+
+    cpu.load(@ptrCast(@constCast(instructions)));
+    cpu.reset();
+    cpu.run();
+
+    std.debug.print("Register a: {d}\n", .{cpu.register_a});
+
+    // loop over memory, print every value and its index when value is not 0
+    //var i: c_int = 0;
+    //for (cpu.mem.memory) |value| {
+    //    if (value != 0) {
+    //        std.debug.print("Memory[{d}] = {d}\n", .{ i, value });
+    //    }
+    //    i += 1;
+    //}
 }
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    _ = nes;
 }
