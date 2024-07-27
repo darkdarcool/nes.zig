@@ -57,6 +57,7 @@ pub fn init() Self {
     };
 }
 
+/// Load a program into memory
 pub fn load(self: *Self, program: []u8) void {
     //         self.memory[0x8000 .. (0x8000 + program.len())].copy_from_slice(&program[..]);
     //var array = self.mem.memory[0x8000..].*;
@@ -69,6 +70,7 @@ pub fn load(self: *Self, program: []u8) void {
     //std.debug.print("0xFFFC: {d}\n", .{self.mem.read_u16(0xFFFC)});
 }
 
+/// Reset the CPU
 pub fn reset(self: *Self) void {
     self.register_x = 0;
     self.register_y = 0;
@@ -126,6 +128,7 @@ fn update_zero_and_negative_flags(self: *Self, result: u8) void {
     }
 }
 
+/// Run the program loaded into memory
 pub fn run(self: *Self) void {
     // Loop through the program
     while (true) {
