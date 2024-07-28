@@ -6,16 +6,61 @@ const Memory = @import("./Memory.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// Different addressing modes for the 6502 CPU
 const AddressingMode = enum {
+    /// Operand is given explicitly in the instruction
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#IMM
     immediate,
+
+    /// Operand is a byte located in the first page of memory
+    /// (i.e., it has a 16 bit address of which the high byte is zero)
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ZPG
     zero_page,
+
+    /// Operand is the result of taking an 8-bit zero page address
+    /// and adding the current value of the X register to it
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ZPX
     zero_page_x,
+
+    /// Operand is the result of taking an 8-bit zero page address
+    /// and adding the current value of the Y register to it
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ZPY
     zero_page_y,
+
+    /// Operand is a full 16-bit address
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ABS
     absolute,
+
+    /// Operand is the result of adding the X register to a full 16-bit address
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ABX
     absolute_x,
+
+    /// Operand is the result of adding the Y register to a full 16-bit address
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#ABY
     absolute_y,
+
+    /// Operand is a full 16-bit address which is found by taking an 8-bit base,
+    /// adding the X register to it, and looing up the 16-bit address stored
+    /// at that location
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#IDX
     indirect_x,
+
+    /// Operand is a full 16-bit address which is found by taking an 8-bit base,
+    /// adding the Y register to it, and looing up the 16-bit address stored
+    /// at that location
+    ///
+    /// See https://www.nesdev.org/obelisk-6502-guide/addressing.html#IDY
     indirect_y,
+
+    /// No addressing mode
     none_addressing,
 };
 
@@ -72,15 +117,10 @@ pub fn init() Self {
 
 /// Load a program into memory
 pub fn load(self: *Self, program: []u8) void {
-    //         self.memory[0x8000 .. (0x8000 + program.len())].copy_from_slice(&program[..]);
-    //var array = self.mem.memory[0x8000..].*;
     std.mem.copyForwards(u8, &self.mem.memory[0x8000..].*, program);
 
     // self.program_counter = 0x8000;
     self.mem.write_u16(0xFFFC, 0x8000);
-
-    // print value at 0xFFFC
-    //std.debug.print("0xFFFC: {d}\n", .{self.mem.read_u16(0xFFFC)});
 }
 
 /// Reset the CPU
