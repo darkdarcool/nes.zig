@@ -8,7 +8,7 @@ const nes = @import("./nes/nes.zig");
 pub fn main() !void {
     var cpu = nes.Cpu.init();
 
-    const instructions = &[_]u8{ 0xA9, 0x05, 0x00 };
+    const instructions = &[_]u8{ 0xA9, 0x55, 0x00 };
 
     cpu.load(@ptrCast(@constCast(instructions)));
     cpu.reset();

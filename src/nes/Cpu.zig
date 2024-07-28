@@ -133,6 +133,9 @@ pub fn reset(self: *Self) void {
     self.program_counter = self.mem.read_u16(0xFFFC);
 }
 
+/// Calculates the operand address based on the provided addressing mode
+///
+/// Returns the 16-bit unsigned integer representing the operand address
 fn get_operand_address(self: *Self, mode: AddressingMode) u16 {
     return switch (mode) {
         .immediate => self.program_counter,
@@ -206,6 +209,17 @@ fn lda(self: *Self, mode: AddressingMode) void {
     self.update_status(self.register_a);
 }
 
+/// LDX - Load X Register
+///
+/// [6502 CPU LDX](https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX)
+fn ldx(self: *Self, mode: AddressingMode) void {
+    const addr = self.get_operand_address(mode);
+    const value = self.mem.read(addr);
+
+    self.register_x = value;
+    self.update_status(self.register_x);
+}
+
 /// STA - Store Accumulator
 ///
 /// [6502 CPU STA](https://www.nesdev.org/obelisk-6502-guide/reference.html#STA)
@@ -244,80 +258,60 @@ fn update_zero_and_negative_flags(self: *Self, result: u8) void {
     }
 }
 
+/// Shorthand for executing an instruction with parameters and
+/// multiple addressing modes
+///
+/// (Basically a macro)
+inline fn instruction_with_params(self: *Self, handler: *const fn (
+    *Self,
+    AddressingMode,
+) void, addressing_mode: AddressingMode, params: u8) void {
+    handler(self, addressing_mode);
+    self.program_counter += params;
+}
+
 /// Run the program loaded into memory
 pub fn run(self: *Self) void {
     // Loop through the program
     while (true) {
-        const opscode = self.mem.read(self.program_counter); // program[self.program_counter];
+        // Get the current instruction
+        const opscode = self.mem.read(self.program_counter);
+        // Move past the opscode
         self.program_counter += 1;
 
         switch (opscode) {
             // === INX ===
             0xE8 => self.inx(),
+
             // === LDA ===
-            0xA9 => {
-                self.lda(AddressingMode.immediate);
-                self.program_counter += 1;
-            },
-            0xA5 => {
-                self.lda(AddressingMode.zero_page);
-                self.program_counter += 1;
-            },
-            0xB5 => {
-                self.lda(AddressingMode.zero_page_x);
-                self.program_counter += 1;
-            },
-            0xAD => {
-                self.lda(AddressingMode.absolute);
-                self.program_counter += 2;
-            },
-            0xBD => {
-                self.lda(AddressingMode.absolute_x);
-                self.program_counter += 2;
-            },
-            0xB9 => {
-                self.lda(AddressingMode.absolute_y);
-                self.program_counter += 2;
-            },
-            0xA1 => {
-                self.lda(AddressingMode.indirect_x);
-                self.program_counter += 1;
-            },
-            0xB1 => {
-                self.lda(AddressingMode.indirect_y);
-                self.program_counter += 1;
-            },
+            0xA9 => self.instruction_with_params(Self.lda, AddressingMode.immediate, 1),
+            0xA5 => self.instruction_with_params(Self.lda, AddressingMode.zero_page, 1),
+            0xB5 => self.instruction_with_params(Self.lda, AddressingMode.zero_page_x, 1),
+            0xAD => self.instruction_with_params(Self.lda, AddressingMode.absolute, 2),
+            0xBD => self.instruction_with_params(Self.lda, AddressingMode.absolute_x, 2),
+            0xB9 => self.instruction_with_params(Self.lda, AddressingMode.absolute_y, 2),
+            0xA1 => self.instruction_with_params(Self.lda, AddressingMode.indirect_x, 1),
+            0xB1 => self.instruction_with_params(Self.lda, AddressingMode.indirect_y, 1),
+
+            // === LDX ===
+            0xA2 => self.instruction_with_params(Self.ldx, AddressingMode.immediate, 1),
+            0xA6 => self.instruction_with_params(Self.ldx, AddressingMode.zero_page, 1),
+            0xB6 => self.instruction_with_params(Self.ldx, AddressingMode.zero_page_y, 1),
+            0xAE => self.instruction_with_params(Self.ldx, AddressingMode.absolute, 2),
+            0xBE => self.instruction_with_params(Self.ldx, AddressingMode.absolute_y, 2),
+
             // === STA ===
-            0x85 => {
-                self.sta(AddressingMode.zero_page);
-                self.program_counter += 1;
-            },
-            0x95 => {
-                self.sta(AddressingMode.zero_page_x);
-                self.program_counter += 1;
-            },
-            0x8D => {
-                self.sta(AddressingMode.absolute);
-                self.program_counter += 2;
-            },
-            0x9D => {
-                self.sta(AddressingMode.absolute_x);
-                self.program_counter += 2;
-            },
-            0x99 => {
-                self.sta(AddressingMode.absolute_y);
-                self.program_counter += 2;
-            },
-            0x81 => {
-                self.sta(AddressingMode.indirect_x);
-                self.program_counter += 1;
-            },
-            0x91 => {
-                self.sta(AddressingMode.indirect_y);
-                self.program_counter += 1;
-            },
+            0x85 => self.instruction_with_params(Self.sta, AddressingMode.zero_page, 1),
+            0x95 => self.instruction_with_params(Self.sta, AddressingMode.zero_page_x, 1),
+            0x8D => self.instruction_with_params(Self.sta, AddressingMode.absolute, 2),
+            0x9D => self.instruction_with_params(Self.sta, AddressingMode.absolute_x, 2),
+            0x99 => self.instruction_with_params(Self.sta, AddressingMode.absolute_y, 2),
+            0x81 => self.instruction_with_params(Self.sta, AddressingMode.indirect_x, 1),
+            0x91 => self.instruction_with_params(Self.sta, AddressingMode.indirect_y, 1),
+
             // === TAX ===
             0xAA => self.tax(),
+
             0x00 => {
                 return;
             },
@@ -346,7 +340,6 @@ test "5 ops working together" {
 
 test "0xE8 INX overflow" {
     var cpu = Self.init();
-    cpu.register_x = 0xFF;
 
     const instructions = &[_]u8{ 0xE8, 0xE8, 0x00 };
 
@@ -400,6 +393,20 @@ test "0xA9 lda from memory" {
     cpu.run();
 
     try expect(cpu.register_a == 0x55);
+}
+
+// === STA (0x85) ===
+
+test "0x85 sta sets memory correctly" {
+    var cpu = Self.init();
+
+    const instructions = &[_]u8{ 0xA9, 0x55, 0x85, 0x10, 0x00 };
+
+    cpu.load(@ptrCast(@constCast(instructions)));
+    cpu.reset();
+    cpu.run();
+
+    try expect(cpu.mem.read(0x10) == 0x55);
 }
 
 // === TAX (0xAA) ===
