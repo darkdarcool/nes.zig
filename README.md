@@ -8,3 +8,7 @@ TODO:
 Current task:
 
 * Implement the rest of the CPU instructions and write their tests
+
+Task I should do but am too lazy to:
+
+* Implement the bus
